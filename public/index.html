@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI News Digest 24h</title>
+<title>AI Intelligence Feed</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -28,7 +28,7 @@
     background: linear-gradient(135deg, #58a6ff, #bc8cff);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
-  .header-right { display: flex; align-items: center; gap: 12px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
   .update-time { font-size: 13px; color: #666; }
 
   .btn-refresh {
@@ -39,6 +39,15 @@
   }
   .btn-refresh:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(35,134,54,0.4); }
   .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .btn-lang {
+    background: linear-gradient(135deg, #6e40c9, #8957e5);
+    color: #fff; border: none; padding: 10px 16px;
+    border-radius: 8px; font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .btn-lang:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(110,64,201,0.4); }
 
   /* Cards Grid */
   .cards { display: grid; grid-template-columns: 1fr; gap: 16px; }
@@ -71,12 +80,23 @@
   .card-meta {
     display: flex; align-items: center; gap: 8px;
     margin-bottom: 8px; font-size: 12px;
+    flex-wrap: wrap;
   }
   .source-tag {
     padding: 2px 8px; border-radius: 12px;
     font-weight: 600; font-size: 11px; color: #fff;
   }
   .card-time { color: #666; }
+
+  .score-badge {
+    font-size: 11px; font-weight: 700; color: #fff;
+    padding: 2px 8px; border-radius: 12px;
+    min-width: 32px; text-align: center;
+    display: inline-block;
+  }
+  .score-high { background: linear-gradient(135deg, #f0883e, #da3633); }
+  .score-mid { background: linear-gradient(135deg, #388bfd, #58a6ff); }
+  .score-low { background: linear-gradient(135deg, #484f58, #6e7681); }
 
   .card-title {
     font-size: 17px; font-weight: 600; line-height: 1.4;
@@ -91,6 +111,20 @@
     -webkit-box-orient: vertical; overflow: hidden;
   }
 
+  .card-reason {
+    font-size: 13px; color: #6e7681; line-height: 1.5;
+    margin-top: 6px; font-style: italic;
+  }
+
+  .card-tags {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+  }
+  .tag {
+    font-size: 10px; font-weight: 600; color: #8b949e;
+    background: #21262d; padding: 2px 8px; border-radius: 10px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
   .card-thumb {
     width: 120px; height: 90px; border-radius: 8px;
     object-fit: cover; flex-shrink: 0;
@@ -100,26 +134,62 @@
   /* Expanded detail */
   .card-detail {
     max-height: 0; overflow: hidden;
-    transition: max-height 0.3s ease;
+    transition: max-height 0.4s ease;
     border-top: 1px solid transparent;
   }
   .card.expanded .card-detail {
-    max-height: 500px;
+    max-height: 800px;
     border-top-color: #21262d;
   }
   .card-detail-inner {
     padding: 16px 20px 20px 80px;
   }
   .card-detail-text {
-    font-size: 14px; color: #8b949e; line-height: 1.7;
-    margin-bottom: 12px;
+    font-size: 14px; color: #c9d1d9; line-height: 1.7;
+    margin-bottom: 16px;
   }
+
+  /* Five-dimension score bars */
+  .score-bars { margin: 16px 0; }
+  .score-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 8px;
+  }
+  .score-label {
+    font-size: 12px; color: #8b949e; min-width: 100px;
+    white-space: nowrap;
+  }
+  .score-track {
+    flex: 1; height: 6px; background: #21262d;
+    border-radius: 3px; overflow: hidden;
+  }
+  .score-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, #58a6ff, #bc8cff);
+    transition: width 0.6s ease;
+  }
+  .score-val {
+    font-size: 12px; color: #8b949e;
+    min-width: 28px; text-align: right;
+    font-weight: 600;
+  }
+
+  /* Secondary sources */
+  .secondary-sources {
+    font-size: 12px; color: #6e7681; margin: 12px 0;
+  }
+  .secondary-sources a {
+    color: #58a6ff; text-decoration: none;
+  }
+  .secondary-sources a:hover { text-decoration: underline; }
+
   .card-detail-link {
     display: inline-block;
     color: #58a6ff; font-size: 13px; font-weight: 600;
     text-decoration: none;
     padding: 6px 14px; border: 1px solid #58a6ff;
     border-radius: 6px; transition: all 0.2s;
+    margin-top: 4px;
   }
   .card-detail-link:hover { background: #58a6ff; color: #0d1117; }
 
@@ -137,13 +207,14 @@
   .empty { text-align: center; padding: 60px 0; color: #666; font-size: 16px; }
 
   /* Responsive */
-  @media (min-width: 640px) {
-    .cards { grid-template-columns: 1fr; }
-  }
   @media (max-width: 480px) {
     .card-thumb { display: none; }
     .card-rank { font-size: 24px; min-width: 32px; }
-    .header h1 { font-size: 22px; }
+    .header h1 { font-size: 20px; }
+    .card-detail-inner { padding-left: 52px; }
+    .score-label { min-width: 70px; font-size: 11px; }
+    .btn-lang { padding: 8px 12px; font-size: 12px; }
+    .btn-refresh { padding: 8px 14px; font-size: 13px; }
   }
 </style>
 </head>
@@ -151,10 +222,11 @@
 
 <div class="container">
   <div class="header">
-    <h1>AI News Digest 24h</h1>
+    <h1>AI Intelligence Feed</h1>
     <div class="header-right">
       <span class="update-time" id="updateTime"></span>
       <button class="btn-refresh" id="btnRefresh" onclick="refresh()">刷新</button>
+      <button class="btn-lang" id="btnLang" onclick="toggleLang()">EN</button>
     </div>
   </div>
 
@@ -170,43 +242,149 @@
 const content = document.getElementById('content');
 const updateTime = document.getElementById('updateTime');
 const btnRefresh = document.getElementById('btnRefresh');
+const btnLang = document.getElementById('btnLang');
+
+let lang = 'zh';
+let currentNews = [];
+
+// --- i18n ---
+const i18n = {
+  zh: {
+    refresh: '刷新',
+    refreshing: '刷新中...',
+    readOriginal: '阅读原文 →',
+    updatedAt: '更新于',
+    justNow: '刚刚',
+    noData: '暂无数据，请点击刷新按钮获取',
+    loadFailed: '加载失败，请稍后重试',
+    refreshFailed: '刷新失败，请稍后重试',
+    loading: '正在获取最新 AI 资讯...',
+    refreshLoading: '正在刷新...',
+    alsoCoveredBy: '相关报道：',
+    minsAgo: ' 分钟前',
+    hoursAgo: ' 小时前',
+    daysAgo: ' 天前',
+  },
+  en: {
+    refresh: 'Refresh',
+    refreshing: 'Refreshing...',
+    readOriginal: 'Read Original →',
+    updatedAt: 'Updated',
+    justNow: 'just now',
+    noData: 'No data available. Click refresh to fetch.',
+    loadFailed: 'Failed to load. Please try again later.',
+    refreshFailed: 'Refresh failed. Please try again later.',
+    loading: 'Fetching latest AI news...',
+    refreshLoading: 'Refreshing...',
+    alsoCoveredBy: 'Also covered by: ',
+    minsAgo: ' min ago',
+    hoursAgo: 'h ago',
+    daysAgo: 'd ago',
+  }
+};
+
+const dims = {
+  zh: { technical: '技术创新', industry: '行业影响', public: '公众关注', practical: '实际应用', future: '未来潜力' },
+  en: { technical: 'Technical', industry: 'Industry', public: 'Public', practical: 'Practical', future: 'Future' }
+};
+
+function t(key) { return i18n[lang][key] || key; }
+
+function toggleLang() {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  btnLang.textContent = lang === 'zh' ? 'EN' : '中文';
+  btnRefresh.textContent = t('refresh');
+  renderCards(currentNews);
+  if (lastUpdatedRaw) {
+    updateTime.textContent = t('updatedAt') + ' ' + timeAgo(lastUpdatedRaw);
+  }
+}
+
+let lastUpdatedRaw = null;
 
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 60) return mins + ' 分钟前';
+  if (mins < 60) return mins + t('minsAgo');
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return hours + ' 小时前';
-  return Math.floor(hours / 24) + ' 天前';
+  if (hours < 24) return hours + t('hoursAgo');
+  return Math.floor(hours / 24) + t('daysAgo');
+}
+
+function scoreClass(score) {
+  if (score >= 80) return 'score-high';
+  if (score >= 60) return 'score-mid';
+  return 'score-low';
 }
 
 function renderCards(news) {
   if (!news || news.length === 0) {
-    content.innerHTML = '<div class="empty">暂无数据，请点击刷新按钮获取</div>';
+    content.innerHTML = '<div class="empty">' + t('noData') + '</div>';
     return;
   }
-  content.innerHTML = '<div class="cards">' + news.map((item, i) => `
+
+  const dimKeys = ['technical', 'industry', 'public', 'practical', 'future'];
+  const dimLabels = dims[lang];
+
+  content.innerHTML = '<div class="cards">' + news.map((item, i) => {
+    const title = item['title_' + lang] || item.title_en || '';
+    const summary = item['summary_' + lang] || item.summary_en || '';
+    const detail = item['detail_' + lang] || item.detail_en || summary;
+    const reason = item['reason_' + lang] || item.reason_en || '';
+    const source = item.primary_source || {};
+    const score = item.score || 0;
+    const scores = item.scores || {};
+    const tags = item.tags || [];
+    const secondarySources = item.secondary_sources || [];
+    const sourceColor = item.sourceColor || '#388bfd';
+    const image = item.image;
+    const pubDate = item.pubDate;
+
+    const scoreBarsHtml = dimKeys.map(key => `
+      <div class="score-row">
+        <span class="score-label">${dimLabels[key]}</span>
+        <div class="score-track"><div class="score-fill" style="width:${scores[key] || 0}%"></div></div>
+        <span class="score-val">${scores[key] || 0}</span>
+      </div>
+    `).join('');
+
+    const secondaryHtml = secondarySources.length > 0
+      ? `<div class="secondary-sources">${t('alsoCoveredBy')}${secondarySources.map(s =>
+          `<a href="${s.link}" target="_blank" onclick="event.stopPropagation()">${s.name}</a>`
+        ).join(', ')}</div>`
+      : '';
+
+    const tagsHtml = tags.length > 0
+      ? `<div class="card-tags">${tags.map(tg => `<span class="tag">${tg}</span>`).join('')}</div>`
+      : '';
+
+    return `
     <div class="card" onclick="toggleCard(this)">
       <div class="card-main">
         <div class="card-rank">${i + 1}</div>
         <div class="card-body">
           <div class="card-meta">
-            <span class="source-tag" style="background:${item.sourceColor}">${item.source}</span>
-            <span class="card-time">${timeAgo(item.pubDate)}</span>
+            <span class="source-tag" style="background:${sourceColor}">${source.name || ''}</span>
+            <span class="score-badge ${scoreClass(score)}">${score}</span>
+            <span class="card-time">${pubDate ? timeAgo(pubDate) : ''}</span>
           </div>
-          <div class="card-title"><a href="${item.link}" target="_blank" onclick="event.stopPropagation()">${item.title}</a></div>
-          <div class="card-summary">${item.summary}</div>
+          <div class="card-title"><a href="${source.link || '#'}" target="_blank" onclick="event.stopPropagation()">${title}</a></div>
+          <div class="card-summary">${summary}</div>
+          ${reason ? `<div class="card-reason">${reason}</div>` : ''}
+          ${tagsHtml}
         </div>
-        ${item.image ? `<img class="card-thumb" src="${item.image}" alt="" onerror="this.style.display='none'">` : ''}
+        ${image ? `<img class="card-thumb" src="${image}" alt="" onerror="this.style.display='none'">` : ''}
       </div>
       <div class="card-detail">
         <div class="card-detail-inner">
-          <div class="card-detail-text">${item.summary}</div>
-          <a class="card-detail-link" href="${item.link}" target="_blank">阅读原文 →</a>
+          <div class="card-detail-text">${detail}</div>
+          <div class="score-bars">${scoreBarsHtml}</div>
+          ${secondaryHtml}
+          <a class="card-detail-link" href="${source.link || '#'}" target="_blank" onclick="event.stopPropagation()">${t('readOriginal')}</a>
         </div>
       </div>
-    </div>
-  `).join('') + '</div>';
+    </div>`;
+  }).join('') + '</div>';
 }
 
 function toggleCard(card) {
@@ -217,31 +395,35 @@ async function loadNews() {
   try {
     const res = await fetch('/api/news');
     const data = await res.json();
-    renderCards(data.news);
+    currentNews = data.news || [];
+    lastUpdatedRaw = data.lastUpdated;
+    renderCards(currentNews);
     if (data.lastUpdated) {
-      updateTime.textContent = '更新于 ' + timeAgo(data.lastUpdated);
+      updateTime.textContent = t('updatedAt') + ' ' + timeAgo(data.lastUpdated);
     }
   } catch (e) {
-    content.innerHTML = '<div class="empty">加载失败，请稍后重试</div>';
+    content.innerHTML = '<div class="empty">' + t('loadFailed') + '</div>';
   }
 }
 
 async function refresh() {
   btnRefresh.disabled = true;
-  btnRefresh.textContent = '刷新中...';
-  content.innerHTML = '<div class="loading"><div class="spinner"></div><div>正在刷新...</div></div>';
+  btnRefresh.textContent = t('refreshing');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div><div>' + t('refreshLoading') + '</div></div>';
   try {
     const res = await fetch('/api/refresh', { method: 'POST' });
     const data = await res.json();
-    renderCards(data.news);
+    currentNews = data.news || [];
+    lastUpdatedRaw = data.lastUpdated;
+    renderCards(currentNews);
     if (data.lastUpdated) {
-      updateTime.textContent = '更新于 刚刚';
+      updateTime.textContent = t('updatedAt') + ' ' + t('justNow');
     }
   } catch (e) {
-    content.innerHTML = '<div class="empty">刷新失败，请稍后重试</div>';
+    content.innerHTML = '<div class="empty">' + t('refreshFailed') + '</div>';
   }
   btnRefresh.disabled = false;
-  btnRefresh.textContent = '刷新';
+  btnRefresh.textContent = t('refresh');
 }
 
 loadNews();
