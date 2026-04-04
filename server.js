@@ -20,7 +20,7 @@ if (GEMINI_API_KEY) {
     console.warn('Failed to initialize Gemini API:', err.message);
   }
 } else {
-  console.log('No GEMINI_API_KEY set, using fallback mode');
+  console.log('No GEMINI_API_KEY set, using local processing mode');
 }
 
 // --- RSS Sources ---
@@ -31,6 +31,342 @@ const FEEDS = [
   { name: 'The Verge', url: 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml', weight: 2, color: '#e5127d' },
   { name: 'MIT Tech Review', url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed', weight: 2, color: '#9b2fae' },
 ];
+
+// --- AI Terms Dictionary (sorted by length descending for greedy matching) ---
+const AI_TERMS = [
+  ['large language model', '大语言模型'], ['language model', '语言模型'],
+  ['machine learning', '机器学习'], ['deep learning', '深度学习'],
+  ['reinforcement learning', '强化学习'], ['transfer learning', '迁移学习'],
+  ['supervised learning', '监督学习'], ['unsupervised learning', '无监督学习'],
+  ['context window', '上下文窗口'], ['attention mechanism', '注意力机制'],
+  ['code generation', '代码生成'], ['image generation', '图像生成'],
+  ['video generation', '视频生成'], ['text generation', '文本生成'],
+  ['speech recognition', '语音识别'], ['object detection', '目标检测'],
+  ['natural language processing', '自然语言处理'],
+  ['natural language', '自然语言'], ['computer vision', '计算机视觉'],
+  ['artificial intelligence', '人工智能'], ['neural network', '神经网络'],
+  ['convolutional neural', '卷积神经'], ['recurrent neural', '循环神经'],
+  ['generative adversarial', '生成对抗'], ['diffusion model', '扩散模型'],
+  ['foundation model', '基础模型'], ['training method', '训练方法'],
+  ['training data', '训练数据'], ['world model', '世界模型'],
+  ['vision language', '视觉语言'], ['knowledge graph', '知识图谱'],
+  ['autonomous driving', '自动驾驶'], ['autonomous agent', '自主智能体'],
+  ['prompt engineering', '提示工程'], ['retrieval augmented', '检索增强'],
+  ['open source', '开源'], ['open-source', '开源'],
+  ['state-of-the-art', '最先进的'], ['real-time', '实时'],
+  ['end-to-end', '端到端'], ['pre-trained', '预训练'],
+  ['fine-tuned', '微调的'], ['fine-tuning', '微调'],
+  ['zero-shot', '零样本'], ['few-shot', '少样本'],
+  ['multi-modal', '多模态'], ['multimodal', '多模态'],
+  ['transformer', 'Transformer'], ['benchmark', '基准测试'],
+  ['reasoning', '推理能力'], ['inference', '推理'],
+  ['alignment', '对齐'], ['safety', '安全性'],
+  ['autonomous', '自主的'], ['regulation', '监管'],
+  ['breakthrough', '突破性进展'], ['architecture', '架构'],
+  ['deployment', '部署'], ['parameter', '参数'],
+  ['agent', '智能体'], ['embedding', '嵌入'],
+  ['hallucination', '幻觉问题'], ['scalability', '可扩展性'],
+  ['healthcare', '医疗领域'], ['robotics', '机器人技术'],
+  ['funding', '融资'], ['dataset', '数据集'],
+  ['GPUs', 'GPU'], ['GPU', 'GPU'], ['TPU', 'TPU'], ['API', 'API'], ['APIs', 'API'],
+  ['chatbot', '聊天机器人'], ['copilot', '智能助手'],
+  ['plugin', '插件'], ['workflow', '工作流'],
+  ['productivity', '生产力'], ['efficiency', '效率'],
+  ['accuracy', '准确率'], ['latency', '延迟'],
+  ['throughput', '吞吐量'], ['optimization', '优化'],
+  ['model', '模型'], ['token', 'token'],
+  ['launches', '发布了'], ['released', '发布了'],
+  ['releases', '发布'], ['announces', '宣布'],
+  ['introduced', '推出了'], ['unveiled', '揭示了'],
+  ['achieves', '实现了'], ['enables', '实现了'],
+  ['researchers', '研究人员'], ['developer', '开发者'],
+  ['performance', '性能'], ['capability', '能力'],
+  ['feature', '功能'], ['framework', '框架'],
+];
+
+// --- Translate text using dictionary ---
+function translateText(enText) {
+  let result = enText;
+  for (const [en, zh] of AI_TERMS) {
+    const regex = new RegExp(`\\b${en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    result = result.replace(regex, zh);
+  }
+  return result;
+}
+
+// --- Auto-assign tags based on keywords ---
+function assignTags(title, summary) {
+  const text = (title + ' ' + summary).toLowerCase();
+  const tags = [];
+
+  if (/\b(model|architecture|algorithm|neural|transformer|diffusion|llm|gpt|bert)\b/i.test(text)) tags.push('model');
+  if (/\b(launch|release|announc|new product|beta|preview|available|ship)\b/i.test(text)) tags.push('product');
+  if (/\b(research|paper|arxiv|study|experiment|findings|propose|novel)\b/i.test(text)) tags.push('research');
+  if (/\b(open.?source|github|apache|mit license|hugging\s*face)\b/i.test(text)) tags.push('open-source');
+  if (/\b(regulat|law|act|compliance|eu ai|govern|policy|ban)\b/i.test(text)) tags.push('regulation');
+  if (/\b(safety|bias|ethic|harmful|responsible|risk|guardrail)\b/i.test(text)) tags.push('safety');
+  if (/\b(fund|rais|invest|series [a-d]|valuation|billion|million.*capital)\b/i.test(text)) tags.push('funding');
+  if (/\b(breakthrough|state.of.the.art|sota|record|first|unprecedented|milestone)\b/i.test(text)) tags.push('breakthrough');
+  if (/\b(infrastr|compute|gpu|hardware|chip|datacenter|cloud)\b/i.test(text)) tags.push('infrastructure');
+  if (/\b(application|use case|deploy|production|real.world|healthcare|finance|education)\b/i.test(text)) tags.push('application');
+
+  return tags.length > 0 ? [...new Set(tags)] : ['ai'];
+}
+
+// --- Five-dimension scoring ---
+const DIMENSION_KEYWORDS = {
+  technical: ['novel', 'breakthrough', 'architecture', 'benchmark', 'sota', 'state-of-the-art',
+    'algorithm', 'efficient', 'scalable', 'transformer', 'diffusion', 'training',
+    'optimization', 'parameter', 'accuracy', 'performance', 'method', 'technique',
+    'innovation', 'advance', 'improve', 'outperform', 'surpass'],
+  industry: ['company', 'enterprise', 'deploy', 'adoption', 'product', 'launch',
+    'partnership', 'revenue', 'billion', 'market', 'commercial', 'release',
+    'google', 'microsoft', 'openai', 'meta', 'anthropic', 'apple', 'amazon',
+    'startup', 'business', 'customer', 'integration'],
+  public: ['viral', 'trending', 'mainstream', 'consumer', 'accessible', 'user',
+    'everyone', 'democratize', 'open source', 'free', 'popular', 'widely',
+    'million users', 'download', 'community', 'social', 'media', 'attention',
+    'controversial', 'debate', 'public'],
+  practical: ['application', 'real-world', 'use case', 'production', 'deploy',
+    'practical', 'solve', 'problem', 'improve', 'efficiency', 'productivity',
+    'healthcare', 'finance', 'education', 'automate', 'tool', 'workflow',
+    'cost', 'faster', 'better', 'mobile', 'device'],
+  future: ['potential', 'future', 'could', 'possibility', 'path to', 'towards',
+    'step towards', 'enable', 'unlock', 'next generation', 'revolutionize',
+    'transformative', 'paradigm', 'emerging', 'frontier', 'vision',
+    'long-term', 'implications', 'reshape'],
+};
+
+const TAG_DIMENSION_BOOST = {
+  model: 'technical', product: 'industry', 'open-source': 'public',
+  application: 'practical', research: 'future', breakthrough: 'technical',
+  funding: 'industry', regulation: 'public', infrastructure: 'practical',
+  safety: 'future',
+};
+
+function scoreDimensions(title, summary, tags) {
+  const text = (title + ' ' + summary).toLowerCase();
+  const scores = {};
+
+  for (const [dim, keywords] of Object.entries(DIMENSION_KEYWORDS)) {
+    let score = 20;
+    let matchCount = 0;
+    for (const kw of keywords) {
+      if (text.includes(kw)) matchCount++;
+    }
+    score += Math.min(matchCount * 8, 60);
+    // Tag boost
+    for (const tag of tags) {
+      if (TAG_DIMENSION_BOOST[tag] === dim) score += 15;
+    }
+    scores[dim] = Math.min(100, score);
+  }
+
+  const overall = Math.round(
+    (scores.technical + scores.industry + scores.public + scores.practical + scores.future) / 5
+  );
+
+  return { score: overall, scores };
+}
+
+// --- Generate detail text (different from summary) ---
+const DETAIL_TEMPLATES_ZH = {
+  model: [
+    '该模型/架构的发布标志着AI技术的又一重要进展。',
+    '从技术角度来看，这一创新有望推动相关领域的进一步发展，并为后续研究提供新的方向。',
+  ],
+  product: [
+    '该产品的推出将为用户带来全新的AI体验。',
+    '业内分析人士认为，这一举措将加速AI技术在实际场景中的落地应用。',
+  ],
+  research: [
+    '这项研究为AI领域提供了新的理论基础和实践思路。',
+    '研究成果有望在未来推动相关技术的突破性发展。',
+  ],
+  'open-source': [
+    '开源社区对此反应积极，预计将吸引大量开发者参与贡献。',
+    '开源策略有助于加速技术迭代和生态建设。',
+  ],
+  regulation: [
+    '这一监管动态将对AI行业的发展方向产生深远影响。',
+    '各方需要密切关注政策变化，及时调整合规策略。',
+  ],
+  safety: [
+    'AI安全问题持续受到业界和公众的高度关注。',
+    '如何在推动创新的同时确保安全性，仍是行业面临的核心挑战。',
+  ],
+  funding: [
+    '此轮融资反映了资本市场对AI赛道的持续看好。',
+    '充足的资金支持将加速产品研发和市场扩张。',
+  ],
+  breakthrough: [
+    '这一突破性进展引发了业界的广泛关注和讨论。',
+    '专家认为，这可能标志着该领域发展进入新阶段。',
+  ],
+  default: [
+    '这一进展体现了AI技术持续快速发展的趋势。',
+    '未来该领域有望涌现更多创新成果。',
+  ],
+};
+
+const DETAIL_TEMPLATES_EN = {
+  model: 'This advancement represents a significant step forward in AI model development, with potential implications for both research and commercial applications.',
+  product: 'The release signals growing maturity in AI product development and could reshape how users interact with AI-powered tools.',
+  research: 'This research contributes important new insights to the field and may open up novel directions for future investigation.',
+  'open-source': 'The open-source approach is expected to accelerate community-driven innovation and broaden access to cutting-edge AI capabilities.',
+  regulation: 'This regulatory development will have significant implications for how AI systems are developed, deployed, and governed.',
+  safety: 'The focus on AI safety reflects the growing recognition that responsible development is essential for sustainable progress.',
+  funding: 'This investment reflects strong market confidence in AI and will likely accelerate development timelines.',
+  breakthrough: 'This breakthrough could mark a turning point in the field, opening up possibilities that were previously considered out of reach.',
+  default: 'This development highlights the rapid pace of innovation in AI and its expanding influence across industries.',
+};
+
+function generateDetail(summary, tags, lang) {
+  const primaryTag = tags[0] || 'default';
+  if (lang === 'zh') {
+    const zhSummary = translateText(summary);
+    const templates = DETAIL_TEMPLATES_ZH[primaryTag] || DETAIL_TEMPLATES_ZH.default;
+    return zhSummary + '\n\n' + templates.join('');
+  } else {
+    const template = DETAIL_TEMPLATES_EN[primaryTag] || DETAIL_TEMPLATES_EN.default;
+    return summary + '\n\n' + template;
+  }
+}
+
+// --- Generate reason ---
+const REASON_MAP_ZH = {
+  model: '涉及重要AI模型技术进展，具有较高技术价值',
+  product: '重要AI产品发布，影响行业格局',
+  research: '前沿AI研究成果，推动学术进步',
+  'open-source': '开源项目动态，促进AI技术普惠',
+  regulation: '重要AI监管政策变动，影响行业发展',
+  safety: 'AI安全议题，关乎技术发展方向',
+  funding: 'AI领域重要融资动态，反映市场趋势',
+  breakthrough: '突破性AI技术进展，具有里程碑意义',
+  infrastructure: 'AI基础设施发展，支撑行业生态',
+  application: 'AI实际应用落地，展现技术价值',
+  default: '近期AI领域值得关注的重要事件',
+};
+
+const REASON_MAP_EN = {
+  model: 'Significant AI model advancement with high technical impact',
+  product: 'Major AI product launch reshaping the industry landscape',
+  research: 'Cutting-edge AI research pushing the boundaries of the field',
+  'open-source': 'Open-source milestone promoting accessible AI development',
+  regulation: 'Key regulatory development affecting AI industry direction',
+  safety: 'Important AI safety topic shaping responsible development',
+  funding: 'Notable AI investment reflecting market confidence and trends',
+  breakthrough: 'Breakthrough achievement marking a milestone in AI progress',
+  infrastructure: 'AI infrastructure advancement supporting ecosystem growth',
+  application: 'Real-world AI application demonstrating practical value',
+  default: 'Notable recent event in the AI landscape',
+};
+
+function generateReason(tags, lang) {
+  const primaryTag = tags[0] || 'default';
+  const map = lang === 'zh' ? REASON_MAP_ZH : REASON_MAP_EN;
+  return map[primaryTag] || map.default;
+}
+
+// --- Event clustering ---
+function normalizeTitle(title) {
+  return title.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function extractEntities(text) {
+  const words = text.match(/\b[A-Z][a-zA-Z]{2,}\b/g) || [];
+  const known = text.match(/\b(AI|LLM|GPT|RLHF|API|NLP|ML|GPU|TPU|AGI|RAG)\b/g) || [];
+  return new Set([...words.map(w => w.toLowerCase()), ...known.map(w => w.toLowerCase())]);
+}
+
+function jaccardSimilarity(setA, setB) {
+  const intersection = new Set([...setA].filter(x => setB.has(x)));
+  const union = new Set([...setA, ...setB]);
+  return union.size === 0 ? 0 : intersection.size / union.size;
+}
+
+function titleSimilarity(a, b) {
+  const na = normalizeTitle(a);
+  const nb = normalizeTitle(b);
+  const wordsA = new Set(na.split(' '));
+  const wordsB = new Set(nb.split(' '));
+  return jaccardSimilarity(wordsA, wordsB);
+}
+
+function clusterEvents(items) {
+  const clusters = [];
+  const used = new Set();
+
+  for (let i = 0; i < items.length; i++) {
+    if (used.has(i)) continue;
+    const cluster = { primary: items[i], members: [items[i]] };
+    const entitiesA = extractEntities(items[i].title + ' ' + items[i].summary);
+
+    for (let j = i + 1; j < items.length; j++) {
+      if (used.has(j)) continue;
+      const tSim = titleSimilarity(items[i].title, items[j].title);
+      if (tSim >= 0.5) {
+        cluster.members.push(items[j]);
+        used.add(j);
+        if ((items[j].rawScore || 0) > (cluster.primary.rawScore || 0)) {
+          cluster.primary = items[j];
+        }
+        continue;
+      }
+      const entitiesB = extractEntities(items[j].title + ' ' + items[j].summary);
+      if (jaccardSimilarity(entitiesA, entitiesB) >= 0.5 && entitiesA.size >= 2) {
+        cluster.members.push(items[j]);
+        used.add(j);
+        if ((items[j].rawScore || 0) > (cluster.primary.rawScore || 0)) {
+          cluster.primary = items[j];
+        }
+      }
+    }
+    used.add(i);
+    clusters.push(cluster);
+  }
+  return clusters;
+}
+
+// --- Local processing pipeline (default, no API needed) ---
+function localProcess(rawItems) {
+  // Step 1: Cluster events
+  const clusters = clusterEvents(rawItems);
+
+  // Step 2: Process each cluster
+  const processed = clusters.map(cluster => {
+    const item = cluster.primary;
+    const tags = assignTags(item.title, item.summary);
+    const { score, scores } = scoreDimensions(item.title, item.summary, tags);
+
+    const secondarySources = cluster.members
+      .filter(m => m !== item)
+      .map(m => ({ name: m.source, link: m.link }));
+
+    return {
+      title_zh: translateText(item.title),
+      title_en: item.title,
+      summary_zh: translateText(item.summary),
+      summary_en: item.summary,
+      detail_zh: generateDetail(item.summary, tags, 'zh'),
+      detail_en: generateDetail(item.summary, tags, 'en'),
+      reason_zh: generateReason(tags, 'zh'),
+      reason_en: generateReason(tags, 'en'),
+      primary_source: { name: item.source, link: item.link },
+      secondary_sources: secondarySources,
+      tags,
+      score,
+      scores,
+      image: item.image,
+      pubDate: item.pubDate,
+      sourceColor: item.sourceColor,
+    };
+  });
+
+  // Step 3: Sort by score, take top 10
+  processed.sort((a, b) => b.score - a.score);
+  return processed.slice(0, 10);
+}
 
 // --- In-memory cache ---
 let cachedNews = [];
@@ -82,7 +418,7 @@ async function fetchAllFeeds() {
     if (seen.has(key)) continue;
     seen.add(key);
     top.push(item);
-    if (top.length >= 10) break;
+    if (top.length >= 20) break;
   }
 
   if (top.length === 0) return getDemoData();
@@ -190,39 +526,7 @@ Return ONLY a valid JSON array. No markdown, no explanation, no code fences.`;
   }
 }
 
-// --- Fallback: pure JS processing ---
-function fallbackProcess(rawItems) {
-  // Normalize scores to 0-100 range
-  const maxRaw = Math.max(...rawItems.map(i => i.rawScore || 1), 1);
-
-  return rawItems.map(item => {
-    const normalizedScore = Math.round(Math.min(100, (item.rawScore || 0) / maxRaw * 80 + 20));
-    return {
-      title_zh: item.title,
-      title_en: item.title,
-      summary_zh: item.summary,
-      summary_en: item.summary,
-      detail_zh: item.summary,
-      detail_en: item.summary,
-      reason_zh: '基于来源权威性和时效性入选',
-      reason_en: 'Selected based on source authority and recency',
-      primary_source: { name: item.source, link: item.link },
-      secondary_sources: [],
-      tags: ['ai'],
-      score: normalizedScore,
-      scores: {
-        technical: normalizedScore,
-        industry: normalizedScore,
-        public: normalizedScore,
-        practical: normalizedScore,
-        future: normalizedScore,
-      },
-      image: item.image,
-      pubDate: item.pubDate,
-      sourceColor: item.sourceColor,
-    };
-  });
-}
+// (localProcess is defined above, replaces the old fallbackProcess)
 
 // --- Refresh ---
 async function refreshNews() {
@@ -235,11 +539,11 @@ async function refreshNews() {
       if (analyzed && analyzed.length > 0) {
         cachedNews = analyzed;
       } else {
-        console.log('Gemini failed, falling back to JS processing');
-        cachedNews = fallbackProcess(rawItems);
+        console.log('Gemini unavailable, using local processing');
+        cachedNews = localProcess(rawItems);
       }
     } else {
-      cachedNews = fallbackProcess(rawItems);
+      cachedNews = localProcess(rawItems);
     }
 
     lastUpdated = new Date().toISOString();

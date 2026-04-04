@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Intelligence Feed</title>
+<title>AI 智能资讯</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -26,7 +26,8 @@
   .header h1 {
     font-size: 28px; font-weight: 700;
     background: linear-gradient(135deg, #58a6ff, #bc8cff);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
   }
   .header-right { display: flex; align-items: center; gap: 10px; }
   .update-time { font-size: 13px; color: #666; }
@@ -206,6 +207,15 @@
 
   .empty { text-align: center; padding: 60px 0; color: #666; font-size: 16px; }
 
+  /* Detail section headings */
+  .detail-heading {
+    font-size: 13px; font-weight: 600; color: #58a6ff;
+    margin: 12px 0 8px; padding-bottom: 4px;
+    border-bottom: 1px solid #21262d;
+    letter-spacing: 0.3px;
+  }
+  .detail-heading:first-child { margin-top: 0; }
+
   /* Responsive */
   @media (max-width: 480px) {
     .card-thumb { display: none; }
@@ -222,7 +232,7 @@
 
 <div class="container">
   <div class="header">
-    <h1>AI Intelligence Feed</h1>
+    <h1 id="appTitle">AI 智能资讯</h1>
     <div class="header-right">
       <span class="update-time" id="updateTime"></span>
       <button class="btn-refresh" id="btnRefresh" onclick="refresh()">刷新</button>
@@ -261,6 +271,9 @@ const i18n = {
     loading: '正在获取最新 AI 资讯...',
     refreshLoading: '正在刷新...',
     alsoCoveredBy: '相关报道：',
+    detailAnalysis: '详细分析',
+    impactScores: '影响力评分',
+    appTitle: 'AI 智能资讯',
     minsAgo: ' 分钟前',
     hoursAgo: ' 小时前',
     daysAgo: ' 天前',
@@ -277,6 +290,9 @@ const i18n = {
     loading: 'Fetching latest AI news...',
     refreshLoading: 'Refreshing...',
     alsoCoveredBy: 'Also covered by: ',
+    detailAnalysis: 'Detailed Analysis',
+    impactScores: 'Impact Scores',
+    appTitle: 'AI Intelligence Feed',
     minsAgo: ' min ago',
     hoursAgo: 'h ago',
     daysAgo: 'd ago',
@@ -294,6 +310,8 @@ function toggleLang() {
   lang = lang === 'zh' ? 'en' : 'zh';
   btnLang.textContent = lang === 'zh' ? 'EN' : '中文';
   btnRefresh.textContent = t('refresh');
+  document.getElementById('appTitle').textContent = t('appTitle');
+  document.title = t('appTitle');
   renderCards(currentNews);
   if (lastUpdatedRaw) {
     updateTime.textContent = t('updatedAt') + ' ' + timeAgo(lastUpdatedRaw);
@@ -329,7 +347,8 @@ function renderCards(news) {
   content.innerHTML = '<div class="cards">' + news.map((item, i) => {
     const title = item['title_' + lang] || item.title_en || '';
     const summary = item['summary_' + lang] || item.summary_en || '';
-    const detail = item['detail_' + lang] || item.detail_en || summary;
+    const detailRaw = item['detail_' + lang] || item.detail_en || summary;
+    const detail = detailRaw.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
     const reason = item['reason_' + lang] || item.reason_en || '';
     const source = item.primary_source || {};
     const score = item.score || 0;
@@ -377,7 +396,9 @@ function renderCards(news) {
       </div>
       <div class="card-detail">
         <div class="card-detail-inner">
+          <h4 class="detail-heading">${t('detailAnalysis')}</h4>
           <div class="card-detail-text">${detail}</div>
+          <h4 class="detail-heading">${t('impactScores')}</h4>
           <div class="score-bars">${scoreBarsHtml}</div>
           ${secondaryHtml}
           <a class="card-detail-link" href="${source.link || '#'}" target="_blank" onclick="event.stopPropagation()">${t('readOriginal')}</a>
